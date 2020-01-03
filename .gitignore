@@ -2,3 +2,4 @@ zzz_test/
 *_test*
 *~
 *.bak
+.DS_Store
