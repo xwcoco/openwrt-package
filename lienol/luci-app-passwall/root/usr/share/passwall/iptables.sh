@@ -132,17 +132,22 @@ load_acl() {
 				[ -n "$ip" ] && echolog "访问控制：IP：$ip，代理模式：$(get_action_chain_name $proxy_mode)"
 				[ -n "$mac" ] && echolog "访问控制：MAC：$mac，代理模式：$(get_action_chain_name $proxy_mode)"
 			fi
-			[ "$TCP_NODE" != "nil" ] && {
-				#local TCP_NODE_TYPE=$(echo $(config_get $TCP_NODE type) | tr 'A-Z' 'a-z')
-				$iptables_mangle -A SS_ACL $(factor $ip "-s") -p tcp -m set --match-set $IPSET_BLACKLIST dst -m comment --comment "$remarks" -j TTL --ttl-set 14$tcp_node
-				$iptables_mangle -A SS_ACL $(factor $ip "-s") -p tcp $(factor $mac "-m mac --mac-source") $(factor $tcp_redir_ports "-m multiport --dport") -m comment --comment "$remarks" -$(get_jump_mode $proxy_mode) $(get_action_chain $proxy_mode)$tcp_node
-			}
-			[ "$UDP_NODE" != "nil" ] && {
-				#local UDP_NODE_TYPE=$(echo $(config_get $UDP_NODE type) | tr 'A-Z' 'a-z')
-				eval udp_redir_port=\$UDP_REDIR_PORT$udp_node
-				$iptables_mangle -A SS_ACL $(factor $ip "-s") -p udp -m set --match-set $IPSET_BLACKLIST dst -m comment --comment "$remarks" -j TPROXY --on-port $udp_redir_port --tproxy-mark 0x1/0x1
-				$iptables_mangle -A SS_ACL $(factor $ip "-s") -p udp $(factor $mac "-m mac --mac-source") $(factor $udp_redir_ports "-m multiport --dport") -m comment --comment "$remarks" -$(get_jump_mode $proxy_mode) $(get_action_chain $proxy_mode)$udp_node
-			}
+			
+			if [ "$proxy_mode" == "disable" ]; then
+				$iptables_mangle -A SS_ACL $(factor $ip "-s") $(factor $mac "-m mac --mac-source") -m comment --comment "$remarks" -j RETURN
+			else
+				[ "$TCP_NODE" != "nil" ] && {
+					#local TCP_NODE_TYPE=$(echo $(config_get $TCP_NODE type) | tr 'A-Z' 'a-z')
+					$iptables_mangle -A SS_ACL $(factor $ip "-s") $(factor $mac "-m mac --mac-source") -p tcp -m set --match-set $IPSET_BLACKLIST dst -m comment --comment "$remarks" -j TTL --ttl-set 14$tcp_node
+					$iptables_mangle -A SS_ACL $(factor $ip "-s") $(factor $mac "-m mac --mac-source") -p tcp $(factor $tcp_redir_ports "-m multiport --dport") -m comment --comment "$remarks" -$(get_jump_mode $proxy_mode) $(get_action_chain $proxy_mode)$tcp_node
+				}
+				[ "$UDP_NODE" != "nil" ] && {
+					#local UDP_NODE_TYPE=$(echo $(config_get $UDP_NODE type) | tr 'A-Z' 'a-z')
+					eval udp_redir_port=\$UDP_REDIR_PORT$udp_node
+					$iptables_mangle -A SS_ACL $(factor $ip "-s") $(factor $mac "-m mac --mac-source") -p udp -m set --match-set $IPSET_BLACKLIST dst -m comment --comment "$remarks" -j TPROXY --on-port $udp_redir_port --tproxy-mark 0x1/0x1
+					$iptables_mangle -A SS_ACL $(factor $ip "-s") $(factor $mac "-m mac --mac-source") -p udp $(factor $udp_redir_ports "-m multiport --dport") -m comment --comment "$remarks" -$(get_jump_mode $proxy_mode) $(get_action_chain $proxy_mode)$udp_node
+				}
+			fi
 			[ -z "$ip" ] && {
 				lower_mac=$(echo $mac | tr '[A-Z]' '[a-z]')
 				ip=$(ip neigh show | grep -E "([0-9]{1,3}[\.]){3}[0-9]{1,3}" | grep $lower_mac | awk '{print $1}')
@@ -175,15 +180,15 @@ dns_hijack() {
 		chromecast_nu=$($iptables_nat -L SS -v -n --line-numbers | grep "dpt:53" | awk '{print $1}')
 		is_right_lanip=$($iptables_nat -L SS -v -n --line-numbers | grep "dpt:53" | grep "$lanip")
 		if [ -z "$chromecast_nu" ]; then
-			echolog "添加接管局域网DNS解析规则..."
+			echolog "添加DNS劫持规则..."
 			$iptables_nat -I SS -i br-lan -p udp --dport 53 -j DNAT --to $lanip 2>/dev/null
 		else
 			if [ -z "$is_right_lanip" ]; then
-				echolog "添加接管局域网DNS解析规则..."
+				echolog "添加DNS劫持规则..."
 				$iptables_nat -D SS $chromecast_nu >/dev/null 2>&1 &
 				$iptables_nat -I SS -i br-lan -p udp --dport 53 -j DNAT --to $lanip 2>/dev/null
 			else
-				echolog " DNS劫持规则已经添加，跳过~" >>$LOG_FILE
+				echolog "DNS劫持规则已经添加，跳过~" >>$LOG_FILE
 			fi
 		fi
 	fi
@@ -424,6 +429,26 @@ add_firewall_rule() {
 				#  游戏模式
 				$iptables_mangle -A SS_GAME$k -p udp -m set --match-set $IPSET_CHN dst -j RETURN
 				$iptables_mangle -A SS_GAME$k -p udp -j TPROXY --on-port $local_port --tproxy-mark 0x1/0x1
+				
+				# 用于本机流量转发，默认只走router
+				#$iptables_mangle -I OUTPUT -j SS
+				$iptables_mangle -A OUTPUT -p udp -m set --match-set $IPSET_LANIPLIST dst -m comment --comment "PassWall" -j RETURN
+				$iptables_mangle -A OUTPUT -p udp -m set --match-set $IPSET_VPSIPLIST dst -m comment --comment "PassWall" -j RETURN
+				$iptables_mangle -A OUTPUT -p udp -m set --match-set $IPSET_WHITELIST dst -m comment --comment "PassWall" -j RETURN
+				[ "$use_udp_node_resolve_dns" == 1 -a -n "$DNS_FORWARD" ] && {
+					for dns in $DNS_FORWARD
+					do
+						$iptables_mangle -A OUTPUT -p udp -d $dns -m multiport --dport 1:65535 -m comment --comment "PassWall" -j MARK --set-mark 1
+					done
+				}
+				$iptables_mangle -A OUTPUT -p udp -m multiport --dport $UDP_REDIR_PORTS -m set --match-set $IPSET_ROUTER dst -m comment --comment "PassWall" -j MARK --set-mark 1
+				$iptables_mangle -A OUTPUT -p udp -m multiport --dport $UDP_REDIR_PORTS -m set --match-set $IPSET_BLACKLIST dst -m comment --comment "PassWall" -j MARK --set-mark 1
+
+				[ "$LOCALHOST_PROXY_MODE" == "global" ] && $iptables_mangle -A OUTPUT -p udp -m multiport --dport $UDP_REDIR_PORTS -m comment --comment "PassWall" -j MARK --set-mark 1
+				[ "$LOCALHOST_PROXY_MODE" == "gfwlist" ] && $iptables_mangle -A OUTPUT -p udp -m multiport --dport $UDP_REDIR_PORTS -m set --match-set $IPSET_GFW dst -m comment --comment "PassWall" -j MARK --set-mark 1
+				[ "$LOCALHOST_PROXY_MODE" == "chnroute" ] && {
+					$iptables_mangle -A OUTPUT -p udp -m multiport --dport $UDP_REDIR_PORTS -m set ! --match-set $IPSET_CHN dst -m comment --comment "PassWall" -j MARK --set-mark 1
+				}
 
 				echolog "IPv4 防火墙UDP转发规则加载完成！"
 			fi
@@ -462,6 +487,18 @@ del_firewall_rule() {
 			rules=$($iptables_nat -L OUTPUT --line-numbers | grep -E "PassWall" | awk '{print $1}')
 			for rule in $rules; do
 				$iptables_nat -D OUTPUT $rule 2>/dev/null
+				break
+			done
+			ipv4_output_exist=$(expr $ipv4_output_exist - 1)
+		done
+	}
+	
+	ipv4_output_exist=$($iptables_mangle -L OUTPUT 2>/dev/null | grep -c -E "PassWall")
+	[ -n "$ipv4_output_exist" ] && {
+		until [ "$ipv4_output_exist" = 0 ]; do
+			rules=$($iptables_mangle -L OUTPUT --line-numbers | grep -E "PassWall" | awk '{print $1}')
+			for rule in $rules; do
+				$iptables_mangle -D OUTPUT $rule 2>/dev/null
 				break
 			done
 			ipv4_output_exist=$(expr $ipv4_output_exist - 1)

@@ -40,8 +40,8 @@ else
 end
 
 -- [[ Global Settings ]]--
-s = m:section(TypedSection, "global", translate("Global Settings"),
-              translate("If you can use it, very stable. If not, GG !!!"))
+s = m:section(TypedSection, "global", translate("Global Settings"))
+-- s.description = translate("If you can use it, very stable. If not, GG !!!")
 s.anonymous = true
 s.addremove = false
 
@@ -81,7 +81,7 @@ local socks5_node_num = api.uci_get_type("global_other", "socks5_node_num", 1)
 for i = 1, socks5_node_num, 1 do
     if i == 1 then
         o = s:option(ListValue, "socks5_node" .. i, translate("Socks5 Node"),
-                     translate("The client can use the router's Socks5 proxy"))
+                     translate("The client can use the router's Socks5 proxy."))
     else
         o = s:option(ListValue, "socks5_node" .. i,
                      translate("Socks5 Node") .. " " .. i)
@@ -92,7 +92,7 @@ end
 
 ---- DNS Forward Mode
 o = s:option(ListValue, "dns_mode", translate("DNS Forward Mode"), translate(
-                 "if you use no patterns are used, DNS of wan will be used by default as upstream of dnsmasq"))
+                 "if you use no patterns are used, DNS of wan will be used by default as upstream of dnsmasq.<br />if has problem, please try another mode."))
 o.rmempty = false
 o:reset_values()
 if is_finded("chinadns-ng") then o:value("chinadns-ng", "ChinaDNS-NG") end
@@ -105,6 +105,45 @@ end
 o:value("local_7913", translate("Use local port 7913 as DNS"))
 o:value("nonuse", translate("No patterns are used"))
 
+---- Use TCP Node Resolve DNS
+o = s:option(Flag, "use_tcp_node_resolve_dns",
+             translate("Use TCP Node Resolve DNS"),
+             translate("If checked, DNS is resolved using the TCP node."))
+o.default = 1
+o:depends("dns_mode", "pdnsd")
+
+---- Upstream china DNS Server for ChinaDNS-NG
+o = s:option(Value, "up_china_chinadns_ng_dns",
+             translate("Upstream china DNS Server for ChinaDNS-NG") .. "(UDP)",
+             translate(
+                 "Domestic DNS server in Advanced Settings is used as domestic DNS by default.<br />Example: 127.0.0.1#5335,223.5.5.5#53<br />Only use two at most. such as smartdns,AdGuard Home..."))
+o.default = "default"
+o:value("default", translate("default"))
+o:value("223.5.5.5", "223.5.5.5(" .. translate("Ali") .. "DNS1)")
+o:value("223.6.6.6", "223.6.6.6(" .. translate("Ali") .. "DNS2)")
+o:value("114.114.114.114", "114.114.114.114(114DNS1)")
+o:value("114.114.115.115", "114.114.115.115(114DNS2)")
+o:value("119.29.29.29", "119.29.29.29(DNSPOD DNS1)")
+o:value("182.254.116.116", "182.254.116.116(DNSPOD DNS2)")
+o:value("1.2.4.8", "1.2.4.8(CNNIC DNS1)")
+o:value("210.2.4.8", "210.2.4.8(CNNIC DNS2)")
+o:value("180.76.76.76", "180.76.76.76(" .. translate("Baidu") .. "DNS)")
+o:depends("dns_mode", "chinadns-ng")
+
+---- Upstream trust DNS Server for ChinaDNS-NG
+o = s:option(Value, "up_trust_chinadns_ng_dns",
+             translate("Upstream trust DNS Server for ChinaDNS-NG") .. "(UDP)",
+             translate(
+                 "Example: 127.0.0.1#5353<br />Only use two at most. such as dns2socks,dns-forwarder..."))
+o.default = "8.8.4.4,8.8.8.8"
+o:value("8.8.4.4,8.8.8.8", "8.8.4.4, 8.8.8.8 (Google DNS)")
+o:value("208.67.222.222,208.67.220.220",
+        "208.67.222.222, 208.67.220.220 (OpenDNS DNS)")
+if is_finded("dns2socks") then
+    o:value("dns2socks", "dns2socks " .. translate("Need Socks5 server"))
+end
+o:depends("dns_mode", "chinadns-ng")
+
 ---- DNS Forward
 o = s:option(Value, "dns_forward", translate("DNS Forward Address"))
 o.default = "8.8.4.4"
@@ -114,31 +153,7 @@ o:value("208.67.222.222", "208.67.222.222 (OpenDNS DNS)")
 o:value("208.67.220.220", "208.67.220.220 (OpenDNS DNS)")
 o:depends("dns_mode", "dns2socks")
 o:depends("dns_mode", "pdnsd")
-
----- Use TCP Node Resolve DNS
-o = s:option(Flag, "use_tcp_node_resolve_dns",
-             translate("Use TCP Node Resolve DNS"),
-             translate("If checked, DNS is resolved using the TCP node."))
-o.default = 1
-o:depends("dns_mode", "pdnsd")
-
----- upstreamm DNS Server for ChinaDNS-NG
-o = s:option(ListValue, "up_chinadns_ng_mode",
-             translate("upstreamm DNS Server for ChinaDNS-NG"), translate(
-                 "Domestic DNS server in advanced Settings is used as domestic DNS by default"))
-o.default = "208.67.222.222"
-o:value("208.67.222.222", "208.67.222.222 (OpenDNS DNS)")
-o:value("208.67.220.220", "208.67.220.220 (OpenDNS DNS)")
-if is_finded("dns2socks") then
-    o:value("dns2socks", "dns2socks " .. translate("Need Socks5 server"))
-end
-o:value("custom", translate("custom"))
-o:depends("dns_mode", "chinadns-ng")
-
-o = s:option(Value, "up_chinadns_ng_custom", translate("DNS Server"), translate(
-                 "example: 127.0.0.1#5335<br>Need at least one,Other DNS services can be used as upstream, such as dns2socks."))
-o.default = "208.67.222.222#443"
-o:depends("up_chinadns_ng_mode", "custom")
+o:depends("up_trust_chinadns_ng_dns", "dns2socks")
 
 ---- Default Proxy Mode
 o = s:option(ListValue, "proxy_mode",
@@ -155,11 +170,12 @@ o:value("returnhome", translate("Return Home"))
 ---- Localhost Proxy Mode
 o = s:option(ListValue, "localhost_proxy_mode",
              translate("Localhost") .. translate("Proxy Mode"), translate(
-                 "The server client can also use this rule to scientifically surf the Internet"))
+                 "The server client can also use this rule to scientifically surf the Internet.<br /> Global and continental whitelist are not recommended for non-special cases!"))
 o:value("default", translate("Default"))
--- o:value("global", translate("Global Proxy").."（"..translate("Danger").."）")
+o:value("global",
+        translate("Global Proxy") .. "（" .. translate("Danger") .. "）")
 o:value("gfwlist", translate("GFW List"))
--- o:value("chnroute", translate("China WhiteList"))
+o:value("chnroute", translate("China WhiteList"))
 o.default = "default"
 o.rmempty = false
 

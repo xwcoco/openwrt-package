@@ -182,6 +182,7 @@ load_config() {
 	DNS_MODE=$(config_t_get global dns_mode pdnsd)
 	DNS_FORWARD=$(config_t_get global dns_forward 8.8.4.4)
 	use_tcp_node_resolve_dns=$(config_t_get global use_tcp_node_resolve_dns 0)
+	use_udp_node_resolve_dns=0
 	process=1
 	if [ "$(config_t_get global_forwarding process 0)" = "0" ]; then
 		process=$(cat /proc/cpuinfo | grep 'processor' | wc -l)
@@ -189,8 +190,24 @@ load_config() {
 		process=$(config_t_get global_forwarding process)
 	fi
 	LOCALHOST_PROXY_MODE=$(config_t_get global localhost_proxy_mode default)
-	DNS1=$(config_t_get global_dns dns_1)
-	DNS2=$(config_t_get global_dns dns_2)
+	DNS1=$(config_t_get global_dns dns_1 114.114.114.114)
+	DNS2=$(config_t_get global_dns dns_2 223.5.5.5)
+	[ "$DNS1" == "dnsbyisp" ] && {
+		local dns1=$(cat /tmp/resolv.conf.auto 2>/dev/null | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | grep -v 0.0.0.0 | grep -v 127.0.0.1 | sed -n '1P')
+		if [ -n "$dns1" ]; then
+			DNS1=$dns1
+		else
+			DNS1="114.114.114.114"
+		fi
+	}
+	[ "$DNS2" == "dnsbyisp" ] && {
+		local dns2=$(cat /tmp/resolv.conf.auto 2>/dev/null | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | grep -v 0.0.0.0 | grep -v 127.0.0.1 | sed -n '2P')
+		if [ -n "$dns2" ]; then
+			DNS2=$dns2
+		else
+			DNS2=""
+		fi
+	}
 	TCP_REDIR_PORT1=$(config_t_get global_proxy tcp_redir_port 1041)
 	TCP_REDIR_PORT2=$(expr $TCP_REDIR_PORT1 + 1)
 	TCP_REDIR_PORT3=$(expr $TCP_REDIR_PORT2 + 1)
@@ -434,7 +451,7 @@ start_tcp_redir() {
 					if [ "$plugin" != "none" ]; then
 						[ "$plugin" == "v2ray-plugin" ] && {
 							local opts=$(config_n_get $temp_server ss_plugin_v2ray_opts)
-							plugin_params="--plugin v2ray-plugin --plugin-opts \"$opts\""
+							plugin_params="--plugin v2ray-plugin --plugin-opts $opts"
 						}
 					fi
 					for k in $(seq 1 $process); do
@@ -518,7 +535,7 @@ start_udp_redir() {
 					if [ "$plugin" != "none" ]; then
 						[ "$plugin" == "v2ray-plugin" ] && {
 							local opts=$(config_n_get $temp_server ss_plugin_v2ray_opts)
-							plugin_params="--plugin v2ray-plugin --plugin-opts \"$opts\""
+							plugin_params="--plugin v2ray-plugin --plugin-opts $opts"
 						}
 					fi
 					$ss_bin -c $config_file -f $RUN_PID_PATH/udp_${TYPE}_1_$i -U $plugin_params >/dev/null 2>&1 &
@@ -571,7 +588,7 @@ start_socks5_proxy() {
 					if [ "$plugin" != "none" ]; then
 						[ "$plugin" == "v2ray-plugin" ] && {
 							local opts=$(config_n_get $temp_server ss_plugin_v2ray_opts)
-							plugin_params="--plugin v2ray-plugin --plugin-opts \"$opts\""
+							plugin_params="--plugin v2ray-plugin --plugin-opts $opts"
 						}
 					fi
 					$ss_bin -c $config_file -b 0.0.0.0 -u $plugin_params >/dev/null 2>&1 &
@@ -697,140 +714,63 @@ start_dns() {
 	chinadns-ng)
 		chinadns_ng_bin=$(find_bin chinadns-ng)
 		[ -n "$chinadns_ng_bin" ] && {
-			local dns1=$DNS1
-			[ "$DNS1" = "dnsbyisp" ] && dns1=$(cat /tmp/resolv.conf.auto 2>/dev/null | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | grep -v 0.0.0.0 | grep -v 127.0.0.1 | sed -n '1P')
-			local dns2=$DNS2
-			[ "$DNS2" = "dnsbyisp" ] && dns2=$(cat /tmp/resolv.conf.auto 2>/dev/null | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | grep -v 0.0.0.0 | grep -v 127.0.0.1 | sed -n '2P')
 			other_port=$(expr $DNS_PORT + 1)
 			cat $RULE_PATH/gfwlist.conf | sort | uniq | sed -e '/127.0.0.1/d' | sed 's/ipset=\/.//g' | sed 's/\/gfwlist//g' > $CONFIG_PATH/gfwlist_chinadns_ng.txt
 			[ -f "$CONFIG_PATH/gfwlist_chinadns_ng.txt" ] && local gfwlist_param="-g $CONFIG_PATH/gfwlist_chinadns_ng.txt"
 			[ -f "$RULE_PATH/chnlist" ] && local chnlist_param="-m $RULE_PATH/chnlist -M"
-			up_chinadns_ng_mode=$(config_t_get global up_chinadns_ng_mode "208.67.222.222")
-			case "$up_chinadns_ng_mode" in
-			208.67.222.222)
-				DNS_FORWARD=$up_chinadns_ng_mode
-				nohup $chinadns_ng_bin -l $DNS_PORT -c $dns1,$dns2 -t 208.67.222.222#443,208.67.222.222#5353 $gfwlist_param $chnlist_param >/dev/null 2>&1 &
-				echolog "运行DNS转发模式：ChinaDNS-NG，国内DNS：$dns1, $dns2，可信DNS：208.67.222.222"
-				;;
-			208.67.220.220)
-				DNS_FORWARD=$up_chinadns_ng_mode
-				nohup $chinadns_ng_bin -l $DNS_PORT -c $dns1,$dns2 -t 208.67.220.220#443,208.67.220.220#5353 $gfwlist_param $chnlist_param >/dev/null 2>&1 &
-				echolog "运行DNS转发模式：ChinaDNS-NG，国内DNS：$dns1, $dns2，可信DNS：208.67.220.220"
-				;;
-			dns2socks)
+			up_china_chinadns_ng_dns=$(config_t_get global up_china_chinadns_ng_dns "default")
+			[ "$up_china_chinadns_ng_dns" == "default" ] && up_china_chinadns_ng_dns="$DNS1,$DNS2"
+			local dns1=$(echo $up_china_chinadns_ng_dns | awk -F "," '{print $1}')
+			[ -n "$dns1" ] && DNS1=$dns1
+			DNS2=$(echo $up_china_chinadns_ng_dns | awk -F "," '{print $2}')
+			
+			up_trust_chinadns_ng_dns=$(config_t_get global up_trust_chinadns_ng_dns "8.8.4.4,8.8.8.8")
+			if [ "$up_trust_chinadns_ng_dns" == "dns2socks" ]; then
 				if [ -n "$SOCKS5_NODE1" -a "$SOCKS5_NODE1" != "nil" ]; then
 					dns2socks_bin=$(find_bin dns2socks)
 					[ -n "$dns2socks_bin" ] && {
 						nohup $dns2socks_bin 127.0.0.1:$SOCKS5_PROXY_PORT1 ${DNS_FORWARD}:53 127.0.0.1:$other_port >/dev/null 2>&1 &
-						nohup $chinadns_ng_bin -l $DNS_PORT -c $dns1,$dns2 -t 127.0.0.1#$other_port $gfwlist_param $chnlist_param >/dev/null 2>&1 &
-						echolog "运行DNS转发模式：ChinaDNS-NG + dns2socks，国内DNS：$dns1, $dns2"
+						nohup $chinadns_ng_bin -l $DNS_PORT -c $up_china_chinadns_ng_dns -t 127.0.0.1#$other_port $gfwlist_param $chnlist_param >/dev/null 2>&1 &
+						echolog "运行DNS转发模式：ChinaDNS-NG + dns2socks(${DNS_FORWARD}:53)，国内DNS：$up_china_chinadns_ng_dns"
 					}
 				else
 					echolog "dns2socks模式需要使用Socks5代理节点，请开启！"
+					force_stop
 				fi
-			;;
-			custom)
-				up_chinadns_ng_custom=$(config_t_get global up_chinadns_ng_custom '208.67.222.222#443,208.67.222.222#5353')
-				nohup $chinadns_ng_bin -l $DNS_PORT -c $dns1,$dns2 -t $up_chinadns_ng_custom $gfwlist_param $chnlist_param >/dev/null 2>&1 &
-				echolog "运行DNS转发模式：ChinaDNS-NG，国内DNS：$dns1, $dns2，可信DNS：$up_chinadns_ng_custom"
-				;;
-			esac
+			else
+				if [ -z "$UDP_NODE1" -o "$UDP_NODE1" == "nil" ]; then
+					nohup $chinadns_ng_bin -l $DNS_PORT -c $up_china_chinadns_ng_dns -t 208.67.222.222#443,208.67.222.222#5353 $gfwlist_param $chnlist_param >/dev/null 2>&1 &
+					echolog "运行DNS转发模式：ChinaDNS-NG，国内DNS：$up_china_chinadns_ng_dns，因为你没有使用UDP节点，只能使用OpenDNS 443端口或5353端口作为可信DNS。"
+				else
+					use_udp_node_resolve_dns=1
+					DNS_FORWARD=$(echo $up_trust_chinadns_ng_dns | sed 's/,/ /g')
+					nohup $chinadns_ng_bin -l $DNS_PORT -c $up_china_chinadns_ng_dns -t $up_trust_chinadns_ng_dns $gfwlist_param $chnlist_param >/dev/null 2>&1 &
+					echolog "运行DNS转发模式：ChinaDNS-NG，国内DNS：$up_china_chinadns_ng_dns，可信DNS：$up_trust_chinadns_ng_dns"
+				fi
+			fi
 		}
 	;;
 	esac
-	echolog "若不正常，请尝试其他模式！"
 }
 
 add_dnsmasq() {
 	mkdir -p $TMP_DNSMASQ_PATH $DNSMASQ_PATH /var/dnsmasq.d
-	local wirteconf dnsconf dnsport isp_dns isp_ip
-	dnsport=$(config_t_get global_dns dns_port)
-	[ -z "$dnsport" ] && dnsport=0
-	if [ "$DNS1" = "dnsbyisp" -o "$DNS2" = "dnsbyisp" ]; then
-		cat >/etc/dnsmasq.conf <<EOF
-all-servers
-no-poll
-no-resolv
-cache-size=2048
-local-ttl=60
-neg-ttl=3600
-max-cache-ttl=1200
-EOF
-		echolog "生成Dnsmasq配置文件。"
-
-		if [ "$dnsport" != "0" ]; then
-			failcount=0
-			while [ "$failcount" -lt "10" ]; do
-				interface=$(ifconfig | grep "$dnsport" | awk '{print $1}')
-				if [ -z "$interface" ]; then
-					echolog "找不到出口接口：$dnsport，1分钟后再重试"
-					let "failcount++"
-					[ "$failcount" -ge 10 ] && exit 0
-					sleep 1m
-				else
-					[ "$DNS1" != "dnsbyisp" ] && {
-						route add -host ${DNS1} dev ${dnsport}
-						echolog "添加DNS1出口路由表：$dnsport"
-						echo server=$DNS1 >>/etc/dnsmasq.conf
-					}
-					[ "$DNS2" != "dnsbyisp" ] && {
-						route add -host ${DNS2} dev ${dnsport}
-						echolog "添加DNS2出口路由表：$dnsport"
-						echo server=$DNS2 >>/etc/dnsmasq.conf
-					}
-					break
-				fi
-			done
-		else
-			isp_dnss=$(cat /tmp/resolv.conf.auto 2>/dev/null | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | sort -u | grep -v 0.0.0.0 | grep -v 127.0.0.1)
-			[ -n "$isp_dnss" ] && {
-				for isp_dns in $isp_dnss; do
-					echo server=$isp_dns >>/etc/dnsmasq.conf
-				done
-			}
-			[ "$DNS1" != "dnsbyisp" ] && {
-				echo server=$DNS1 >>/etc/dnsmasq.conf
-			}
-			[ "$DNS2" != "dnsbyisp" ] && {
-				echo server=$DNS2 >>/etc/dnsmasq.conf
-			}
-		fi
-	else
-		wirteconf=$(cat /etc/dnsmasq.conf 2>/dev/null | grep "server=$DNS1")
-		dnsconf=$(cat /etc/dnsmasq.conf 2>/dev/null | grep "server=$DNS2")
-		if [ "$dnsport" != "0" ]; then
-			failcount=0
-			while [ "$failcount" -lt "10" ]; do
-				interface=$(ifconfig | grep "$dnsport" | awk '{print $1}')
-				if [ -z "$interface" ]; then
-					echolog "找不到出口接口：$dnsport，1分钟后再重试"
-					let "failcount++"
-					[ "$failcount" -ge 10 ] && exit 0
-					sleep 1m
-				else
-					route add -host ${DNS1} dev ${dnsport}
-					echolog "添加DNS1出口路由表：$dnsport"
-					route add -host ${DNS2} dev ${dnsport}
-					echolog "添加DNS2出口路由表：$dnsport"
-					break
-				fi
-			done
-		fi
-		if [ -z "$wirteconf" ] || [ -z "$dnsconf" ]; then
-			cat >/etc/dnsmasq.conf <<EOF
-all-servers
-no-poll
-no-resolv
-server=$DNS1
-server=$DNS2
-cache-size=2048
-local-ttl=60
-neg-ttl=3600
-max-cache-ttl=1200
-EOF
-			echolog "生成Dnsmasq配置文件。"
-		fi
-	fi
+	local server_1 server_2
+	[ -n "$DNS1" ] && server_1="server=$DNS1"
+	[ -n "$DNS2" ] && server_2="server=$DNS2"
+	
+	#cat <<-EOF > /etc/dnsmasq.conf
+	#	$server_1
+	#	$server_2
+	#	all-servers
+	#	no-poll
+	#	no-resolv
+	#	cache-size=2048
+	#	local-ttl=60
+	#	neg-ttl=3600
+	#	max-cache-ttl=1200
+	#EOF
+	
 	# if [ -n "cat /var/state/network |grep pppoe|awk -F '.' '{print $2}'" ]; then
 	# sed -i '/except-interface/d' /etc/dnsmasq.conf >/dev/null 2>&1 &
 	# for wanname in $(cat /var/state/network |grep pppoe|awk -F '.' '{print $2}')
@@ -877,13 +817,20 @@ EOF
 		rm -rf $TMP_DNSMASQ_PATH/blacklist_host.conf
 		rm -rf $TMP_DNSMASQ_PATH/whitelist_host.conf
 		restdns=1
-		echolog "生成回国模式Dnsmasq配置文件。"
 	fi
 
-	echo "conf-dir=$TMP_DNSMASQ_PATH" >/var/dnsmasq.d/dnsmasq-$CONFIG.conf
-	echo "conf-dir=$TMP_DNSMASQ_PATH" >$DNSMASQ_PATH/dnsmasq-$CONFIG.conf
+	echo "conf-dir=$TMP_DNSMASQ_PATH" > /var/dnsmasq.d/dnsmasq-$CONFIG.conf
+	cat <<-EOF > /var/dnsmasq.d/dnsmasq-$CONFIG.conf
+		$server_1
+		$server_2
+		all-servers
+		no-poll
+		cache-size=2048
+		conf-dir=$TMP_DNSMASQ_PATH
+	EOF
+	cp -rf /var/dnsmasq.d/dnsmasq-$CONFIG.conf $DNSMASQ_PATH/dnsmasq-$CONFIG.conf
 	if [ "$restdns" == 1 ]; then
-		echolog "重启Dnsmasq。。。"
+		echolog "dnsmasq：生成配置文件并重启服务。"
 		/etc/init.d/dnsmasq restart 2>/dev/null
 	fi
 }
@@ -1073,7 +1020,7 @@ start_haproxy() {
 				    bind 0.0.0.0:$bport
 				    mode tcp
 			EOF
-			for i in $(seq 0 100); do
+			for i in $(seq 0 50); do
 				bips=$(config_t_get balancing lbss '' $i)
 				bports=$(config_t_get balancing lbort '' $i)
 				bweight=$(config_t_get balancing lbweight '' $i)
@@ -1082,35 +1029,39 @@ start_haproxy() {
 				if [ -z "$bips" ] || [ -z "$bports" ]; then
 					break
 				fi
+				local bip=$(echo $bips | awk -F ":" '{print $1}')
+				local bport=$(echo $bips | awk -F ":" '{print $2}')
+				[ "$bports" != "default" ] && bport=$bports
+				[ -z "$bport" ] && break
 				if [ "$bbackup" = "1" ]; then
 					bbackup=" backup"
-					echolog "添加故障转移备节点:$bips"
+					echolog "负载均衡：添加故障转移备节点:$bip"
 				else
 					bbackup=""
-					echolog "添加负载均衡主节点:$bips"
+					echolog "负载均衡：添加负载均衡主节点:$bip"
 				fi
-				#si=$(echo $bips | grep -E "([0-9]{1,3}[\.]){3}[0-9]{1,3}")
+				#si=$(echo $bip | grep -E "([0-9]{1,3}[\.]){3}[0-9]{1,3}")
 				#if [ -z "$si" ]; then
-				#	bips=$(resolveip -4 -t 2 $bips | awk 'NR==1{print}')
-				#	if [ -z "$bips" ]; then
-				#		bips=$(nslookup $bips localhost | sed '1,4d' | awk '{print $3}' | grep -v : | awk 'NR==1{print}')
+				#	bip=$(resolveip -4 -t 2 $bip | awk 'NR==1{print}')
+				#	if [ -z "$bip" ]; then
+				#		bip=$(nslookup $bip localhost | sed '1,4d' | awk '{print $3}' | grep -v : | awk 'NR==1{print}')
 				#	fi
-				#	echolog "负载均衡${i} IP为：$bips"
+				#	echolog "负载均衡${i} IP为：$bip"
 				#fi
-				echo "    server server_$i $bips:$bports weight $bweight check inter 1500 rise 1 fall 3 $bbackup" >>$HAPROXY_FILE
+				echo "    server $bip:$bport $bip:$bport weight $bweight check inter 1500 rise 1 fall 3 $bbackup" >> $HAPROXY_FILE
 				if [ "$exports" != "0" ]; then
 					failcount=0
-					while [ "$failcount" -lt "10" ]; do
+					while [ "$failcount" -lt "3" ]; do
 						interface=$(ifconfig | grep "$exports" | awk '{print $1}')
 						if [ -z "$interface" ]; then
 							echolog "找不到出口接口：$exports，1分钟后再重试"
 							let "failcount++"
-							[ "$failcount" -ge 10 ] && exit 0
+							[ "$failcount" -ge 3 ] && exit 0
 							sleep 1m
 						else
-							route add -host ${bips} dev ${exports}
+							route add -host ${bip} dev ${exports}
 							echolog "添加SS出口路由表：$exports"
-							echo "$bips" >>/tmp/balancing_ip
+							echo "$bip" >>/tmp/balancing_ip
 							break
 						fi
 					done
@@ -1120,7 +1071,7 @@ start_haproxy() {
 			console_port=$(config_t_get global_haproxy console_port)
 			console_user=$(config_t_get global_haproxy console_user)
 			console_password=$(config_t_get global_haproxy console_password)
-			cat <<-EOF >>$HAPROXY_FILE
+			cat <<-EOF >> $HAPROXY_FILE
 			
 				listen status
 				    bind 0.0.0.0:$console_port
@@ -1132,7 +1083,7 @@ start_haproxy() {
 				    stats admin if TRUE
 			EOF
 			nohup $haproxy_bin -f $HAPROXY_FILE 2>&1
-			echolog "负载均衡运行成功！"
+			[ "$?" == 0 ] && echolog "负载均衡：运行成功！" || echolog "负载均衡：运行失败！"
 		}
 	}
 }
@@ -1141,12 +1092,12 @@ add_vps_port() {
 	multiwan=$(config_t_get global_dns wan_port 0)
 	if [ "$multiwan" != "0" ]; then
 		failcount=0
-		while [ "$failcount" -lt "10" ]; do
+		while [ "$failcount" -lt "3" ]; do
 			interface=$(ifconfig | grep "$multiwan" | awk '{print $1}')
 			if [ -z "$interface" ]; then
 				echolog "找不到出口接口：$multiwan，1分钟后再重试"
 				let "failcount++"
-				[ "$failcount" -ge 10 ] && exit 0
+				[ "$failcount" -ge 3 ] && exit 0
 				sleep 1m
 			else
 				route add -host ${TCP_NODE1_IP} dev ${multiwan}
@@ -1171,6 +1122,11 @@ kill_all() {
 	kill -9 $(pidof $@) >/dev/null 2>&1 &
 }
 
+force_stop() {
+	rm -f "$LOCK_FILE"
+	exit 0
+}
+
 boot() {
 	local delay=$(config_t_get global_delay start_delay 0)
 	if [ "$delay" -gt 0 ]; then
@@ -1188,19 +1144,19 @@ start() {
 	! load_config && return 1
 	[ -f "$LOCK_FILE" ] && return 3
 	touch "$LOCK_FILE"
+	start_dns
+	add_dnsmasq
 	add_vps_port
 	start_haproxy
 	start_socks5_proxy
 	start_tcp_redir
 	start_udp_redir
-	start_dns
-	add_dnsmasq
 	source $APP_PATH/iptables.sh start
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1 &
 	start_crontab
 	set_cru
 	rm -f "$LOCK_FILE"
-	echolog "运行完成！"
+	echolog "运行完成！\n"
 	return 0
 }
 
@@ -1220,7 +1176,7 @@ stop() {
 	rm -rf $CONFIG_PATH
 	stop_dnsmasq
 	stop_crontab
-	echolog "关闭相关程序，清理相关文件和缓存完成。\n"
+	echolog "关闭相关程序，清理相关文件和缓存完成。"
 	sleep 1s
 }
 
