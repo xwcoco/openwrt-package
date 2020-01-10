@@ -45,7 +45,7 @@ ln -sf /sbin/ip /usr/bin/ip
 
 #sed -i 's/downloads.openwrt.org/openwrt.proxy.ustclug.org/g' /etc/opkg/distfeeds.conf
 #sed -i 's/http/https/g' /etc/opkg/distfeeds.conf
-sed -i 's/root::0:0:99999:7:::/root:$1$Wba.tB.l$HAePsJSFBDW5JlG2eeDJX.:0:99999:7:::/g' /etc/shadow
+sed -i 's#root::0:0:99999:7:::#root:$1$9mi80fAa$o.d2j7HkjDBmhTp/..Oqq0:18271:0:99999:7:::#g' /etc/shadow
 
 #uci set dhcp.lan.dhcpv6='server'
 #uci set dhcp.lan.ra_management='1'
