@@ -4,14 +4,14 @@ CONFIG=passwall
 CONFIG_PATH=/var/etc/$CONFIG
 
 config_n_get() {
-	local ret=$(uci get $CONFIG.$1.$2 2>/dev/null)
+	local ret=$(uci -q get $CONFIG.$1.$2 2>/dev/null)
 	echo ${ret:=$3}
 }
 
 config_t_get() {
 	local index=0
 	[ -n "$4" ] && index=$4
-	local ret=$(uci get $CONFIG.@$1[$index].$2 2>/dev/null)
+	local ret=$(uci -q get $CONFIG.@$1[$index].$2 2>/dev/null)
 	echo ${ret:=$3}
 }
 
@@ -75,8 +75,8 @@ done
 for i in $(seq 1 $SOCKS5_NODE_NUM); do
 	eval temp_server=\$SOCKS5_NODE$i
 	if [ "$temp_server" != "nil" ]; then
-		[ -f "/var/etc/passwall/port/Socks5_$i" ] && listen_port=$(echo -n `cat /var/etc/passwall/port/Socks5_$i`)
-		icount=$(ps -w | grep -v grep | grep -i -E "${CONFIG}/Socks5_${i}|brook client -l 0.0.0.0:${listen_port}" | wc -l)
+		[ -f "/var/etc/passwall/port/SOCKS5_$i" ] && listen_port=$(echo -n `cat /var/etc/passwall/port/SOCKS5_$i`)
+		icount=$(ps -w | grep -v grep | grep -i -E "${CONFIG}/SOCKS5_${i}|brook client -l 0.0.0.0:${listen_port}" | wc -l)
 		if [ $icount = 0 ]; then
 			/etc/init.d/passwall restart
 			exit 0
