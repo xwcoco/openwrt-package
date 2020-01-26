@@ -35,11 +35,18 @@ uci commit minidlna
 uci set network.lan=interface
 uci set network.lan.ifname='eth0'
 uci set network.lan.proto='static'
+#uci set network.lan.ipaddr='192.168.0.4'
 uci set network.lan.ipaddr='192.168.50.3'
 uci set network.lan.netmask='255.255.255.0'
+#uci set network.lan.gateway='192.168.50.1'
 uci set network.lan.gateway='192.168.50.1'
 uci set network.lan.dns='202.102.224.68'
-uci set network.lan.type='bridge'
+#uci set network.lan.type='bridge'
+
+uci set network.wan = interface
+uci set network.wan.ifname = 'eth0'
+uci set network.wan.proto='none'
+
 
 uci set dhcp.lan.ignore="1"
 uci commit dhcp
@@ -58,6 +65,8 @@ sed -i 's#root::0:0:99999:7:::#root:$1$9mi80fAa$o.d2j7HkjDBmhTp/..Oqq0:18271:0:9
 #sed -i '/REDIRECT --to-ports 53/d' /etc/firewall.user
 #echo "iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53" >> /etc/firewall.user
 #echo "iptables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53" >> /etc/firewall.user
+
+echo "iptables -t nat -I POSTROUTING -j MASQUERADE" >> /etc/firewall.user
 
 sed -i '/option disabled/d' /etc/config/wireless
 sed -i '/set wireless.radio${devidx}.disabled/d' /lib/wifi/mac80211.sh
