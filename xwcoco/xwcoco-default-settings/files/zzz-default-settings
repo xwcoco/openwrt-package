@@ -35,9 +35,9 @@ uci commit minidlna
 uci set network.lan=interface
 uci set network.lan.ifname='eth0'
 uci set network.lan.proto='static'
-uci set network.lan.ipaddr='192.168.0.4'
+uci set network.lan.ipaddr='192.168.50.3'
 uci set network.lan.netmask='255.255.255.0'
-uci set network.lan.gateway='192.168.0.1'
+uci set network.lan.gateway='192.168.50.1'
 uci set network.lan.dns='202.102.224.68'
 uci set network.lan.type='bridge'
 

@@ -43,16 +43,21 @@ nm=tb:option(DummyValue,"name",translate("File Name"))
 mt=tb:option(DummyValue,"mtime",translate("Update Time"))
 
 function IsYamlFile(e)
-e=e or""
-local e=string.lower(string.sub(e,-5,-1))
-return e==".yaml"
+   e=e or""
+   local e=string.lower(string.sub(e,-5,-1))
+   return e == ".yaml"
+end
+function IsYmlFile(e)
+   e=e or""
+   local e=string.lower(string.sub(e,-4,-1))
+   return e == ".yml"
 end
 
 btnis=tb:option(Button,"switch",translate("Switch Config"))
 btnis.template="openclash/other_button"
 btnis.render=function(o,t,a)
-if not e[t]then return false end
-if IsYamlFile(e[t].name)then
+if not e[t] then return false end
+if IsYamlFile(e[t].name) or IsYmlFile(e[t].name) then
 a.display=""
 else
 a.display="none"
@@ -62,7 +67,9 @@ Button.render(o,t,a)
 end
 btnis.write=function(a,t)
 luci.sys.exec(string.format('uci set openclash.config.config_path="/etc/openclash/config/%s"',e[t].name))
+uci:set("openclash", "config", "enable", 1)
 uci:commit("openclash")
+SYS.call("/etc/init.d/openclash restart >/dev/null 2>&1 &")
 HTTP.redirect(luci.dispatcher.build_url("admin", "services", "openclash", "client"))
 end
 
