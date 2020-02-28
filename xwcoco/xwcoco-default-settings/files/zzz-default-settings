@@ -47,9 +47,18 @@ uci set network.wan = interface
 uci set network.wan.ifname = 'eth0'
 uci set network.wan.proto='none'
 
+uci set dhcp.@dnsmasq[0].rebind_domain='plex.direct'
+
 
 uci set dhcp.lan.ignore="1"
+
+uci add dhcp domain
+uci set dhcp.@domain[-1].name='xwhomeesxi.lan'
+uci set dhcp.@domain[-1].ip='192.168.50.3'
+
 uci commit dhcp
+
+
 
 ln -sf /sbin/ip /usr/bin/ip
 
