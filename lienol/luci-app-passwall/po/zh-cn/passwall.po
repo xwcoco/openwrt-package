@@ -250,6 +250,9 @@ msgstr "回国模式"
 msgid "Localhost"
 msgstr "本机"
 
+msgid "Router Localhost"
+msgstr "路由器自身"
+
 msgid "Danger"
 msgstr "危险"
 
@@ -487,8 +490,8 @@ msgstr "负载均衡端口"
 msgid "Load Balancing Setting"
 msgstr "负载均衡设置"
 
-msgid "Add a node, Export Of Multi WAN Only support Multi Wan. Load specific gravity range 1-256. Multiple primary servers can be load balanced, standby will only be enabled when the primary server is offline!"
-msgstr "添加节点，指定出口功能是为多WAN用户准备的。负载比重范围1-256。多个主服务器可以负载均衡，备用只有在主服务器离线时才会启用！"
+msgid "Add a node, Export Of Multi WAN Only support Multi Wan. Load specific gravity range 1-256. Multiple primary servers can be load balanced, standby will only be enabled when the primary server is offline! Multiple groups can be set, Haproxy port same one for each group."
+msgstr "添加节点，指定出口功能是为多WAN用户准备的。负载比重范围1-256。多个主服务器可以负载均衡，备用只有在主服务器离线时才会启用！可以设置多个组，负载均衡端口相同则为一组。"
 
 msgid "Node"
 msgstr "节点"
@@ -621,6 +624,12 @@ msgstr "手动订阅"
 
 msgid "Delete All Subscribe Node"
 msgstr "删除所有订阅节点"
+
+msgid "Filter keyword"
+msgstr "过滤关键字"
+
+msgid "When subscribing, the keywords in the list are discarded."
+msgstr "订阅时，将丢弃包含列表里的关键字的节点。"
 
 msgid "Add"
 msgstr "添加"
@@ -811,8 +820,8 @@ msgstr "状态信息显示节点检测"
 msgid "Status Show IP111"
 msgstr "状态信息显示IP111"
 
-msgid "Hide Menu"
-msgstr "隐藏菜单"
+msgid "Hide menu method, input example in the address bar:"
+msgstr "隐藏菜单方法，地址栏输入例："
 
 msgid "After the hidden to the display, input example in the address bar:"
 msgstr "当你隐藏后想再次显示，地址栏输入例："

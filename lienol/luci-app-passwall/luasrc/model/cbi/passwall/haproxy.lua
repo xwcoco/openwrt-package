@@ -6,9 +6,11 @@ local appname = "passwall"
 
 local n = {}
 uci:foreach(appname, "nodes", function(e)
-    if e.remarks and e.address and e.port and e.address ~= "127.0.0.1" then
-        e.remark = "[%s] %s:%s" % {e.remarks, e.address, e.port}
-        n[e[".name"]] = e
+    if e.type and e.remarks and e.port and e.address and e.address ~= "127.0.0.1" then
+        if e.address:match("[\u4e00-\u9fa5]") and e.address:find("%.") and e.address:sub(#e.address) ~= "." then
+            e.remark = "%s：[%s] %s:%s" % {translate(e.type), e.remarks, e.address, e.port}
+            n[e[".name"]] = e
+        end
     end
 end)
 
@@ -46,16 +48,9 @@ o = s:option(Value, "console_port", translate("Console Port"), translate(
 o.default = "1188"
 o:depends("balancing_enable", 1)
 
----- Haproxy Port
-o = s:option(Value, "haproxy_port", translate("Haproxy Port"),
-             translate("Configure this node with 127.0.0.1: this port"))
-o.default = "1181"
-o:depends("balancing_enable", 1)
-
 -- [[ Balancing Settings ]]--
-s = m:section(TypedSection, "balancing", translate("Load Balancing Setting"),
-              translate(
-                  "Add a node, Export Of Multi WAN Only support Multi Wan. Load specific gravity range 1-256. Multiple primary servers can be load balanced, standby will only be enabled when the primary server is offline!"))
+s = m:section(TypedSection, "haproxy_config", translate("Load Balancing Setting"),
+              "<font color='red'>" .. translate("Add a node, Export Of Multi WAN Only support Multi Wan. Load specific gravity range 1-256. Multiple primary servers can be load balanced, standby will only be enabled when the primary server is offline! Multiple groups can be set, Haproxy port same one for each group.").."</font>")
 s.template = "cbi/tblsection"
 s.sortable = true
 s.anonymous = true
@@ -77,6 +72,11 @@ o.rmempty = false
 o = s:option(Value, "lbort", translate("Node Port"))
 o:value("default", translate("Default"))
 o.default = "default"
+o.rmempty = false
+
+---- Haproxy Port
+o = s:option(Value, "haproxy_port", translate("Haproxy Port"))
+o.default = "1181"
 o.rmempty = false
 
 ---- Node Weight
