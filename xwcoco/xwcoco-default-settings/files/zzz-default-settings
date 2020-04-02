@@ -54,7 +54,7 @@ uci set dhcp.lan.ignore="1"
 
 uci add dhcp domain
 uci set dhcp.@domain[-1].name='xwhomeesxi.lan'
-uci set dhcp.@domain[-1].ip='192.168.50.3'
+uci set dhcp.@domain[-1].ip='192.168.50.2'
 
 uci commit dhcp
 
